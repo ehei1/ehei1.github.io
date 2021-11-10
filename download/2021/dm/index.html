@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Deep Miner</title>
+    <!--link rel="preload" as="font" href="assets/itch.io/PixelOverload_FontsBasicPack/Baskic8.otf" type="font/wott2"/-->
+    <script src="phaser.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body id='main' background="white">
+    <script>
+class BackgroundScene extends Phaser.Scene
+{
+    gameScene;
+    layer;
+
+    constructor ()
+    {
+        super('BackgroundScene');
+    }
+
+    preload ()
+    {
+        this.load.image('sky', 'assets/itch.io/free-pixel-art-plataformer-painted-style/Background.png');
+        this.load.image('peak0', 'assets/itch.io/free-pixel-art-plataformer-painted-style/peak0.png');
+        this.load.image('peak1', 'assets/itch.io/free-pixel-art-plataformer-painted-style/peak1.png');
+        this.load.image('star', 'assets/star.png');
+        this.load.image('bomb', 'assets/bomb.png');
+    }
+
+    create ()
+    {
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        this._background = this.add.image(0, 0, 'sky').setOrigin(0);
+        this._peak0 = this.add.image(width, height, 'peak0').setOrigin(1,1);
+        this._peak1 = this.add.image(0, height, 'peak1').setOrigin(0.5,1);
+
+        //  If you'd rather use a layer to container all Game Objects, use the following (and see updateCamera)
+
+        // const bg = this.add.image(0, 0, 'sky');
+        // this.layer = this.add.container();
+        // this.layer.add(bg);
+
+        //  Create some clouds to show we can animate objects in this Scene as well as the Game Scene
+        //this.time.addEvent({ delay: 3000, callback: this.spawnCloud, callbackScope: this, repeat: 12 });
+
+        this.scene.launch('GameScene');
+
+        this.gameScene = this.scene.get('GameScene');
+    }
+
+    updateCamera ()
+    {
+        const width = this.scale.gameSize.width;
+        const height = this.scale.gameSize.height;
+
+        const camera = this.cameras.main;
+
+        //  There is 240px of extra padding below the game area in the background graphic
+        //  so we account for it in the y offset (scaled by the game zoom factor)
+
+        const zoom = this.gameScene.getZoom();
+        const offset = 120 * zoom;
+
+        //  We can either zoom and re-center the camera:
+
+        //camera.setZoom(zoom);
+        camera.centerOn(width / 2, height / 2);
+
+        //this._background.setSize(width, height);
+        this._background.displayHeight = height;            
+        this._background.displayWidth = width;
+
+        //this._peak0.setPosition(width - this._peak0.width, 0);
+        //this._peak0.setOrigin(0, 0);
+        this._peak0.setPosition(width, height);
+        this._peak0.setScale(zoom);
+        
+        this._peak1.setPosition(0, height);
+        this._peak1.setScale(zoom * 2);
+        //  Or, if you want to put all of the Game Objects in this Scene into a layer,
+        //  you can position and scale that:
+
+        // this.layer.x = width / 2;
+        // this.layer.y = (height / 2) + offset;
+        // this.layer.setScale(zoom);
+    }
+    /*
+    spawnCloud (cloud)
+    {
+        const cloudType = Phaser.Math.Between(1, 3);
+
+        const x = 1400;
+        const y = Phaser.Math.Between(0, this.scale.height / 1.25);
+
+        if (!cloud)
+        {
+            cloud = this.add.image(x, y, 'clouds', 'cloud' + cloudType);
+        }
+        else
+        {
+            cloud.setPosition(x, y);
+        }
+
+        this.tweens.add({
+            targets: cloud,
+            x: -400,
+            duration: Phaser.Math.Between(20000, 60000),
+            ease: 'linear',
+            onComplete: () => this.spawnCloud(cloud)
+        });
+    }
+    */
+}
+
+//  This Scene is aspect ratio locked at 640 x 960 (and scaled and centered accordingly)
+class GameScene extends Phaser.Scene
+{
+    GAME_WIDTH = 640;
+    GAME_HEIGHT = 960;
+    TILE_ROW_COUNT = 14;
+    TILE_COLUMN_COUNT = 12;
+    TILE_SIZE = 640 / 12;
+    TIME_AT_DESTROY = 1 * 1000;
+    REWARDS = {
+        20 : 'gem',
+        50 : 'can',
+       100 : null,
+    };
+
+    backgroundScene;
+    parent;
+    sizer;
+    player;
+    stars;
+    bombs;
+    platforms;
+    cursors;
+    score = 0;
+    gameOver = false;
+    scoreText;
+    mousePressed = false;
+    pick_count = 24;
+    timeAtStart = 0;
+    nextRemovingTime = 0;
+    gem_counter = 0;
+    can_counter = 0;
+    reward_images = [];
+
+    constructor ()
+    {
+        super({ key: 'GameScene', active: true });
+    }
+
+    preload()
+    {
+        this.load.image('wall0', 'assets/itch.io/16x16-dungeon-tileset/wall0.png');
+        this.load.image('pick', 'assets/itch.io/16x16-dungeon-tileset/pick.png');
+
+        this.load.spritesheet('button0', 'assets/itch.io/buttons-pixelart/play-button.png', { frameWidth: 230, frameHeight: 208 });
+        this.load.spritesheet('girl0', 'assets/itch.io/red-hood-character/red hood itch free Copy-Sheet.png', { frameWidth: 112, frameHeight: 133 });
+    }
+
+    create ()
+    {
+        const width = this.scale.gameSize.width;
+        const height = this.scale.gameSize.height;
+
+        this.parent = new Phaser.Structs.Size(width, height);
+        this.sizer = new Phaser.Structs.Size(this.GAME_WIDTH, this.GAME_HEIGHT, Phaser.Structs.Size.FIT, this.parent);
+
+        this.parent.setSize(width, height);
+        this.sizer.setSize(width, height);
+
+        this.backgroundScene = this.scene.get('BackgroundScene');
+
+        this.updateCamera();
+
+        this.scale.on('resize', this.resize, this);
+
+        const guide = this.add.image(0, 0, 'guide').setOrigin(0, 0).setDepth(1).setVisible(false);
+        
+        //this.add.text(this.GAME_WIDTH / 2, this.GAME_HEIGHT - 16, 'Press X to toggle mobile guide', { fontSize: '16px', fill: '#ffffff' }).setDepth(1).setOrigin(0.5);
+        /*
+        this.input.keyboard.on('keydown-X', () => {
+            guide.visible = !guide.visible;
+        });
+        */
+       this.walls = [];
+       this.traces = [];
+
+        //  -----------------------------------
+        //  -----------------------------------
+        //  -----------------------------------
+        //  Normal game stuff from here on down
+        //  -----------------------------------
+        //  -----------------------------------
+        //  -----------------------------------
+        const top = 100;
+
+        for (let row = 0; row < this.TILE_ROW_COUNT; ++row) {
+            for(let col = 0; col < this.TILE_COLUMN_COUNT; ++col) {
+                const x = col * this.TILE_SIZE;
+                const y = row * this.TILE_SIZE + top;
+                let wall = this.add.sprite(x, y, 'wall0').setOrigin(0).setInteractive();
+                wall.displayHeight = this.TILE_SIZE;
+                wall.displayWidth = this.TILE_SIZE;
+                wall._data = { row: row, column: col };
+                wall.setTint(0xff0000);
+
+                wall.on('pointerdown', function (pointer) {
+                    if(this.scene.timeAtStart != 0) {
+                        return;
+                    }
+                    this.scene.traces.forEach(function (item, index, array) {
+                        item.setTint(0xff0000);
+                        item.setAlpha(1);
+                    });
+
+                    this.scene.mousePressed = true;
+                    this.scene.traces = [this];
+                    
+                    this.scene.button.anims.play('ready');
+                   
+                    this.setTint(0xffffff);
+                    this.scene.pick_count_text.setText(this.scene.pick_count - 1);
+                });
+
+                wall.on('pointerover', function (pointer) {
+                    if (this.scene.mousePressed === false) {
+                        return;
+                    }
+                    else if (this.tintTopLeft === 0xffffff) {
+                        return;
+                    }
+                    else if (this.scene.pick_count <= this.scene.traces.length) {
+                        return;
+                    }
+
+                    const last = this.scene.traces[this.scene.traces.length - 1];
+
+                    if (Math.abs(this._data.row - last._data.row) > 1 || Math.abs(this._data.column - last._data.column) > 1) {
+                        return;
+                    }
+
+                    for (let i = 0; i < this.scene.traces.length; ++i) {
+                        if (this.scene.traces[i] == this) {
+                            return;
+                        }
+                    }
+
+                    this.scene.traces.push(this);
+                    this.setTint(0xffffff);
+                    this.scene.pick_count_text.setText(this.scene.pick_count - this.scene.traces.length);
+                });
+                wall.on('pointerup', function (pointer) {
+                    this.scene.mousePressed = false; 
+                });
+
+                this.walls.push(wall);
+            }
+        }
+
+        //this.input.dragDistanceThreshold = 16;
+        /*
+        this.input.on('pointerdown', function(pointer) {
+            if(this.scene.timeAtStart === 0) {
+                this.scene.walls.forEach(function (item, index, array) {
+                    item.setTint(0xff0000);
+                });
+                this.scene.traces = [];
+                this.scene.pick_count_text.setText(this.scene.pick_count); 
+            }
+        });
+        */
+        //this.input.on('pointerup', function() { this.scene.mousePressed = false;});
+        //this.input.on('pointermove', function(pointer) { 
+        //    if(this.scene.mousePressed === true) {
+        //        console.log(pointer.x, pointer.y);
+        //    }
+        //});
+        this.time_text = this.add.text(0, 0, '00:00:00', {fontFamily: 'font0', fontSize: '50px', fill: '#ffffff'});
+        // this.time_text = this.add.text(0, 0, '00:00:00', {font: '50px Courier', fill: '#ffffff'});
+        this.pick_count_text = this.add.text(this.sizer.width, 0, this.pick_count, {fontFamily: 'font0', fontSize: '50px', fill: '#000000'});
+        this.pick_count_text.setOrigin(1, 0);
+
+        const pick = this.add.image(0, 0, 'pick').setOrigin(1, 0);
+        pick.setScale(3);
+        pick.setPosition(this.sizer.width - pick.displayWidth - 50, 0);
+
+        // button
+        {
+            this.anims.create({
+                key: 'idle',
+                frames: this.anims.generateFrameNumbers('button0', { start: 0, end: 0 }),
+                frameRate: 1,
+            });
+            this.anims.create({
+                key: 'ready',
+                frames: this.anims.generateFrameNumbers('button0', { start: 0, end: 1 }),
+                frameRate: 5,
+                repeat: -1
+            });
+            this.anims.create({
+                key: 'pressed',
+                frames: this.anims.generateFrameNumbers('button0', { start: 0, end: 1 }),
+                frameRate: 10
+            });
+
+            let button = this.add.sprite(0, 0, 'button0').setOrigin(0, 0);
+            button.setScale(0.5).setInteractive();
+            this.button = button;
+            const x = (this.sizer.width + button.displayWidth) / 2;
+            const y = (this.TILE_ROW_COUNT) * this.TILE_SIZE + button.displayHeight;
+            button.setPosition(x, y);
+            button.anims.play('idle', true);
+            button.on('pointerdown', function (pointer) {
+                // reset game
+                if(this.anims.currentAnim.key === 'pressed') {
+                    const resultScene = this.scene.scene.get('ResultScene');
+                    if(resultScene.scene.isVisible() === true) {
+                        return;
+                    }
+                                        
+                    this.anims.play('ready');
+                    this.setTint(0xffffff);
+
+                    this.scene.walls.forEach(function(item, index, arr) {
+                        item.setAlpha(1);
+                        item.setTint(0xff0000);
+                    });
+
+                    this.scene.girl.anims.play('girl-idle', true).setPosition(300, 0).setOrigin(0, 0.4);
+                    this.scene.timeAtStart = 0;
+                    this.scene.time_text.setText('00:00:00');
+                    this.scene.pick_count_text.setText(this.scene.pick_count);
+
+                    this.scene.reward_images.forEach(function (item, index, arr) {
+                        item.destroy();
+                    });
+                    this.scene.reward_images = [];
+                    this.scene.gem_counter = 0;
+                    this.scene.can_counter = 0;
+                } 
+                else {
+                    this.anims.play('pressed');
+                    this.setTint(0xff0000);
+                    this.setAlpha(1);
+
+                    const time = new Date().getTime();
+
+                    this.scene.timeAtStart = time;
+                    this.scene.nextRemovingTime = time + this.scene.TIME_AT_DESTROY;
+
+                    this.scene.girl.anims.play('girl-attack', true);
+                }
+            });
+            
+        }
+
+        // girl
+        {
+            this.anims.create({
+                key: 'girl-idle',
+                frames: this.anims.generateFrameNumbers('girl0', { start: 0, end: 23 }),
+                frameRate: 30,
+                repeat: -1
+            });
+            this.anims.create({
+                key: 'girl-attack',
+                frames: this.anims.generateFrameNumbers('girl0', { start: 59, end: 59 + 61 }),
+                frameRate: 30,
+                repeat: -1
+            });
+            let girl = this.add.sprite(300, 0, 'girl0').setOrigin(0, 0.4);
+            girl.setScale(2);
+            girl.anims.play('girl-idle', true);
+
+            this.girl = girl;
+        }
+    }
+
+    //  ------------------------
+    //  ------------------------
+    //  ------------------------
+    //  Resize related functions
+    //  ------------------------
+    //  ------------------------
+    //  ------------------------
+
+    resize (gameSize)
+    {
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        //this.parent.setSize(width, height);
+        this.sizer.setSize(width, height);
+
+        this.updateCamera();
+    }
+
+    updateCamera ()
+    {
+        const camera = this.cameras.main;
+
+        const x = Math.ceil((this.parent.width - this.sizer.width) * 0.5);
+        const y = 0;
+        const scaleX = this.sizer.width / this.GAME_WIDTH;
+        const scaleY = this.sizer.height / this.GAME_HEIGHT;
+
+        camera.setViewport(x, y, this.sizer.width, this.sizer.height);
+        camera.setZoom(Math.max(scaleX, scaleY));
+        camera.centerOn(this.GAME_WIDTH / 2, this.GAME_HEIGHT / 2);
+
+        this.backgroundScene.updateCamera();
+    }
+
+    getZoom ()
+    {
+        return this.cameras.main.zoom;
+    }
+
+    //  ------------------------
+    //  ------------------------
+    //  ------------------------
+    //  Game related functions
+    //  ------------------------
+    //  ------------------------
+    //  ------------------------
+
+    update ()
+    {
+        if(this.timeAtStart > 0) {
+            const time = new Date().getTime();
+            let diff = time - this.timeAtStart;
+            const millseconds = diff;
+            diff /= 1000;
+            const one_hour = 60 * 60;
+            const one_minute = 60;
+            let hours = parseInt(diff / one_hour);
+            diff -= one_hour * hours;
+            let minutes = parseInt(diff / one_minute);
+            let seconds = parseInt(diff - one_minute * minutes);
+
+            if (hours < 10) {
+                hours = '0' + hours.toString();
+            }
+            if (minutes < 10) {
+                minutes = '0' + minutes.toString();
+            }
+            if (seconds < 10) {
+                seconds = '0' + seconds.toString();
+            }
+            
+            this.time_text.setText(hours + ':' + minutes + ':' + seconds);
+
+            if (this.traces.length <= 0) {
+                return;
+            }
+
+            const trace = this.traces[0];
+            this.girl.setPosition(trace.x, trace.y).setOrigin(0.4, 0.5);
+
+            let gap = this.nextRemovingTime - time;
+
+            if(gap <= 0) {
+                this.nextRemovingTime = time + this.TIME_AT_DESTROY;
+
+                const index = this.traces.indexOf(trace);
+                if (index > -1) {
+                    this.traces.splice(index, 1);
+
+                    if(this.traces.length === 0) {
+                        this.girl.anims.play('girl-idle', true);
+                    }
+                }
+
+                // 보상을 받는다
+                {
+                    let max = 100;
+                    const choose = Phaser.Math.Between(0, max);
+                        
+                    for(var key in this.REWARDS) {
+                        if (parseInt(key) >= choose) {
+                            const value = this.REWARDS[key];
+
+                            if(value) {
+                                if(value === 'gem') {
+                                    ++this.gem_counter;
+
+                                    let image = this.add.image(trace.x, trace.y, 'star').setOrigin(0);
+                                    this.reward_images.push(image);
+                                }
+                                else if(value === 'can') {
+                                    ++this.can_counter;
+                                            
+                                    let image = this.add.image(trace.x, trace.y, 'bomb').setOrigin(0);
+                                    this.reward_images.push(image);
+                                }
+                                else {
+                                    console.log('not defined reward');
+                                }
+
+                            }
+                                    
+                            break;
+                        }
+                    }
+                }
+
+                if(this.traces.length === 0) {
+                    //this.scene.start('ResultScene', {gem: this.gem_counter, can: this.can_counter});
+                    let data = {gem: this.gem_counter, can: this.can_counter};
+                    let scene = this.scene.get('ResultScene');
+                    scene.setData(data);
+                }
+            } else {
+                gap = Math.max(gap, 0);
+                trace.setAlpha(gap / this.TIME_AT_DESTROY);
+            }
+        }
+    }
+}
+
+class ResultScene extends Phaser.Scene {
+    gem_text;
+    can_text;
+
+    constructor() {
+        super({ key: 'ResultScene', active: true });
+    }
+
+    preload() {
+        this.load.image('close_button', 'assets/close.png');
+        this.load.image('popup', 'assets/popup.png');
+    }
+
+    create() {
+        //const backgroundScene = this.scene.get("BackgroundScene");
+        //const gameScene = this.scene.get('GameScene');
+        //const backgroundCanvas = backgroundScene.renderer.canvas;
+        //const gameSceneSizer = gameScene.sizer;
+
+        const canvas = this.scene.scene.renderer.canvas;
+        //const centerX = (backgroundCanvas.clientWidth - gameSceneSizer.width) / 2;
+
+        const popup = this.add.image(0, 0, 'popup').setOrigin(0, 0);
+        
+        let wscale = canvas.clientWidth / popup.width;
+        let hscale = canvas.clientHeight / popup.height;
+        let scale = Math.min(wscale, hscale);
+        popup.setScale(scale / 2);
+        let centerX = (canvas.clientWidth - popup.displayWidth) / 2;
+        let centerY = (canvas.clientHeight - popup.displayHeight) / 2;
+        popup.setPosition(centerX, centerY);
+        
+        centerX = canvas.clientWidth / 2 - popup.displayWidth / 7;
+        centerY = canvas.clientHeight / 2;
+        this.add.image(centerX, centerY - 100, "star").setOrigin(0);
+        this.add.image(centerX, centerY, "bomb").setOrigin(0);
+
+        this.gem_text = this.add.text(centerX + 50, centerY - 100, "0", {fontFamily: 'font0', fontSize: '20px', fill: '#ffffff'});
+        this.can_text = this.add.text(centerX + 50, centerY, "0", {fontFamily: 'font0', fontSize: '20px', fill: '#ffffff'});
+
+        const button = this.add.sprite(centerX, 500, 'close_button').setOrigin(0).setInteractive();
+        wscale = canvas.clientWidth / button.width;
+        hscale = canvas.clientHeight / button.height;
+        scale = Math.min(wscale, hscale);
+        button.setScale(scale / 10);
+        centerX = (canvas.clientWidth - button.displayWidth) / 2;
+        centerY = (canvas.clientHeight - popup.displayHeight) / 2;
+        const buttonY = centerY + popup.displayHeight - 70;
+
+        button.setPosition(centerX, buttonY);
+        button.on('pointerdown', function(pointer) {
+            //this.scene.setActive(false);
+            this.scene.scene.setVisible(false);
+            
+            const scene = this.scene.scene.get('GameScene');
+            scene.scene.bringToTop();
+        });
+        this.button = button;
+
+        //this.scene.setActive(false);
+        this.scene.setVisible(false);
+    }
+
+    setData(result) {
+        this.scene.bringToTop();
+        //this.scene.setActive(true);
+        this.scene.setVisible(true);
+
+        this.gem_text.setText(result.gem);
+        this.can_text.setText(result.can);
+    }
+}
+
+
+const config = {
+    type: Phaser.AUTO,
+    backgroundColor: '#000000',
+    pixelArt: true,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        parent: 'phaser-example',
+        width: 640,
+        height: 960,
+        min: {
+            width: 320,
+            height: 480
+        },
+        max: {
+            width: '100%',
+            height: '100%'
+        }
+    },
+    scene: [ BackgroundScene, ResultScene, GameScene ],
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 300 },
+            debug: false
+        }
+    }
+};
+
+const game = new Phaser.Game(config);
+    </script>
+
+</body>
+</html>
