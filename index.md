@@ -1,7 +1,7 @@
 ---
 title: /
 layout: home
-permalink: 
+permalink: /
 ---
 
 # Peace Maker
@@ -24,6 +24,7 @@ strategy role playing
 # Tetris
 puzzle
 https://ehei.itch.io/tetris
+[play](download/2020/index.html)
 ![screenshot](download/2020/shot0.png)
 
 
