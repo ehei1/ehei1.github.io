@@ -1,5 +1,5 @@
 ---
-title: / 0won Game House
+title: /
 layout: home
 permalink: 
 ---
