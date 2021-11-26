@@ -13,12 +13,15 @@ puzzle
 idle
 [play](download/2021/dm/index.html)
 ![screenshot](download/2021/dm/shot0.png)
+2021
 
 
 # Angel Kingdom
 strategy role playing
 ... comming soon
+[video]https://youtu.be/aYHHPsBORus
 [![Angel Kingdom](download/2021/ak/shot0.png)](https://youtu.be/aYHHPsBORus)
+2021
 
 
 # Tetris
@@ -26,15 +29,18 @@ puzzle
 https://ehei.itch.io/tetris
 [play](download/2020/index.html)
 ![screenshot](download/2020/shot0.png)
+2020
 
 
 # CQ
 puzzle
 [download](download/2006/setup_CQ_Beta.zip)
 [![CQ](download/2006/shot0.png)](https://www.youtube.com/watch?v=opPunG7QWHo&t=5s)
+2006
 
 
 # Fisherman
 puzzle
 [download](download/2005/fisherman.zip)
 ![screenshot](download/2005/shot0.png)
+2005
