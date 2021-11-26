@@ -24,8 +24,7 @@ permalink: /
 
 # Tetris, 2020
 * puzzle
-* https://ehei.itch.io/tetris
-* [play](download/2020/index.html)
+* [download](https://ehei.itch.io/tetris) / [play](download/2020/index.html)
 ![screenshot](download/2020/shot0.png)
 
 
