@@ -24,13 +24,13 @@ permalink: /
 
 # Tetris, 2020
 * puzzle
-* [download](https://ehei.itch.io/tetris) / [play](download/2020/index.html)
+* [video](https://youtu.be/pTz-CeoJXr4) / [download](https://ehei.itch.io/tetris) / [play](download/2020/index.html)
 ![screenshot](download/2020/shot0.png)
 
 
 # CQ, 2006
 * puzzle
-* [download](download/2006/setup_CQ_Beta.zip)
+* [video](https://youtu.be/5ZXl0sSmyBA) / [download](download/2006/setup_CQ_Beta.zip)
 
 [![CQ](download/2006/shot0.png)](https://www.youtube.com/watch?v=opPunG7QWHo&t=5s)
 
